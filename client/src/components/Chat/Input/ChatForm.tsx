@@ -33,6 +33,17 @@ import EditBadges from './EditBadges';
 import BadgeRow from './BadgeRow';
 import Mention from './Mention';
 import store from '~/store';
+import NotesToggle from './NotesToggle';
+import { useNotes } from './NotesContext';
+
+const DBG = (() => {
+  try {
+    return localStorage.getItem('notesDbg') === '1';
+  } catch {
+    return false;
+  }
+})();
+const dlog = (...args: any[]) => DBG && console.debug('[ChatForm]', ...args);
 
 const ChatForm = memo(({ index = 0 }: { index?: number }) => {
   const submitButtonRef = useRef<HTMLButtonElement>(null);
@@ -44,6 +55,9 @@ const ChatForm = memo(({ index = 0 }: { index?: number }) => {
   const [visualRowCount, setVisualRowCount] = useState(1);
   const [isTextAreaFocused, setIsTextAreaFocused] = useState(false);
   const [backupBadges, setBackupBadges] = useState<Pick<BadgeItem, 'id'>[]>([]);
+  const [sendNotesCtx, setSendNotesCtx] = useState<boolean>(() => {
+    try { return localStorage.getItem('sendNotesCtx') === '1'; } catch { return false; }
+  });
 
   const SpeechToText = useRecoilValue(store.speechToText);
   const TextToSpeech = useRecoilValue(store.textToSpeech);
@@ -108,17 +122,13 @@ const ChatForm = memo(({ index = 0 }: { index?: number }) => {
   );
 
   const handleContainerClick = useCallback(() => {
-    /** Check if the device is a touchscreen */
-    if (window.matchMedia?.('(pointer: coarse)').matches) {
-      return;
-    }
+    // Check if the device is a touchscreen
+    if (window.matchMedia?.('(pointer: coarse)').matches) return;
     textAreaRef.current?.focus();
   }, []);
 
   const handleFocusOrClick = useCallback(() => {
-    if (isCollapsed) {
-      setIsCollapsed(false);
-    }
+    if (isCollapsed) setIsCollapsed(false);
   }, [isCollapsed]);
 
   useAutoSave({
@@ -129,7 +139,36 @@ const ChatForm = memo(({ index = 0 }: { index?: number }) => {
     isSubmitting: isSubmitting || isSubmittingAdded,
   });
 
-  const { submitMessage, submitPrompt } = useSubmitMessage();
+  const { submitMessage: originalSubmitMessage, submitPrompt } = useSubmitMessage();
+  const { getNotesContext, notes } = useNotes();
+
+  const submitMessage = useCallback(
+    (data: { text: string }) => {
+      const payload: any = { ...data };
+      let notesContextJSON = '';
+
+      if (sendNotesCtx) {
+        notesContextJSON = getNotesContext();
+        if (notesContextJSON) {
+          payload.text = `${notesContextJSON}
+
+${payload.text}`;
+          // Or: payload.notes_ctx = JSON.parse(notesContextJSON);
+        }
+      }
+
+      try {
+        dlog('sendNotesCtx:', sendNotesCtx);
+        dlog('raw notes string:', notes);
+        dlog('notesContextJSON:', notesContextJSON);
+        dlog('Final prompt text:', payload.text);
+        dlog('Whole payload object:', payload);
+      } catch {}
+
+      return originalSubmitMessage(payload);
+    },
+    [sendNotesCtx, getNotesContext, originalSubmitMessage, notes],
+  );
 
   const handleKeyUp = useHandleKeyUp({
     index,
@@ -137,6 +176,7 @@ const ChatForm = memo(({ index = 0 }: { index?: number }) => {
     setShowPlusPopover,
     setShowMentionPopover,
   });
+
   const {
     isNotAppendable,
     handlePaste,
@@ -313,6 +353,9 @@ const ChatForm = memo(({ index = 0 }: { index?: number }) => {
                 }
               />
               <div className="mx-auto flex" />
+              <div className={cn(isRTL ? 'mr-2' : 'ml-2', 'flex items-center')}>
+              <NotesToggle onToggle={setSendNotesCtx} initialValue={sendNotesCtx} />
+              </div>
               {SpeechToText && (
                 <AudioRecorder
                   methods={methods}

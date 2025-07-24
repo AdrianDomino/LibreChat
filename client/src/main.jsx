@@ -8,14 +8,17 @@ import { ApiErrorBoundaryProvider } from './hooks/ApiErrorBoundaryContext';
 import 'katex/dist/katex.min.css';
 import 'katex/dist/contrib/copy-tex.js';
 import { NotesBridge } from './notesBridge';
+import { NotesProvider } from './components/Chat/Input/NotesContext';
 
 const container = document.getElementById('root');
 const root = createRoot(container);
 
 root.render(
   <ApiErrorBoundaryProvider>
-    <NotesBridge>
-      <App />
-    </NotesBridge>
+    <NotesProvider>
+      <NotesBridge>
+        <App />
+      </NotesBridge>
+    </NotesProvider>
   </ApiErrorBoundaryProvider>,
 );
